@@ -1,0 +1,75 @@
+{
+  "columns": [
+    {
+      "name": "feature",
+      "type": "string"
+    },
+    {
+      "name": "psi",
+      "type": "double"
+    }
+  ],
+  "rows": [
+    [
+      "submission_month",
+      13.1985
+    ],
+    [
+      "provider_claim_count",
+      0.7977
+    ],
+    [
+      "days_service_to_claim",
+      0.4938
+    ],
+    [
+      "provider_monthly_claim_volume",
+      0.1795
+    ],
+    [
+      "patient_age",
+      0.1738
+    ],
+    [
+      "amount_zscore_within_provider",
+      0.1582
+    ],
+    [
+      "amount_vs_provider_avg",
+      0.1305
+    ],
+    [
+      "claim_amount",
+      0.128
+    ],
+    [
+      "prior_visits_12m",
+      0.1142
+    ],
+    [
+      "patient_state",
+      0.0814
+    ],
+    [
+      "provider_avg_claim_amount",
+      0.0556
+    ],
+    [
+      "diagnosis_code",
+      0.0532
+    ],
+    [
+      "procedure_code",
+      0.0489
+    ],
+    [
+      "submission_dayofweek",
+      0.0454
+    ],
+    [
+      "visit_type",
+      0.0296
+    ]
+  ],
+  "fetchedAt": "2026-08-31T15:58:56.952282+00:00"
+}
