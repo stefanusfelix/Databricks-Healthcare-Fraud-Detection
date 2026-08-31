@@ -4,6 +4,7 @@
 export const config = { maxDuration: 60 };
 
 const QUERIES = {
+  ping: `SELECT 1 AS ok`,
   prediction: `
     SELECT *
     FROM healthcare_fraud.ml.v_prediction_drift
@@ -21,11 +22,11 @@ const QUERIES = {
   `,
 };
 
-const API = (host, path) => `https://${host}/api/2.0/sql/statements${path}`;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function dbx(path, options) {
-  const host = process.env.DBX_HOST;
-  const res = await fetch(API(host, path), {
+  const url = `https://${process.env.DBX_HOST}/api/2.0/sql/statements${path}`;
+  const res = await fetch(url, {
     ...options,
     headers: {
       Authorization: `Bearer ${process.env.DBX_TOKEN}`,
@@ -33,21 +34,29 @@ async function dbx(path, options) {
       ...(options?.headers || {}),
     },
   });
-  return res.json();
-}
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const text = await res.text();
+  try {
+    return { httpStatus: res.status, ...JSON.parse(text) };
+  } catch {
+    // Not JSON: usually an HTML login page, which means the host is wrong.
+    return { httpStatus: res.status, raw: text.slice(0, 200) };
+  }
+}
 
 export default async function handler(req, res) {
   const key = req.query.q;
   const statement = QUERIES[key];
 
   if (!statement) {
-    return res.status(400).json({ error: `Unknown query: ${key}` });
+    return res.status(400).json({
+      error: `Unknown query "${key}". Allowed: ${Object.keys(QUERIES).join(', ')}`,
+    });
   }
 
-  if (!process.env.DBX_HOST || !process.env.DBX_TOKEN || !process.env.DBX_WAREHOUSE_ID) {
-    return res.status(500).json({ error: 'Missing DBX_HOST, DBX_TOKEN or DBX_WAREHOUSE_ID' });
+  const missing = ['DBX_HOST', 'DBX_TOKEN', 'DBX_WAREHOUSE_ID'].filter((k) => !process.env[k]);
+  if (missing.length) {
+    return res.status(500).json({ error: `Missing environment variables: ${missing.join(', ')}` });
   }
 
   try {
@@ -63,7 +72,15 @@ export default async function handler(req, res) {
       }),
     });
 
-    // The warehouse may be cold. Poll until it settles or we run out of budget.
+    // Databricks rejected the request before it ever became a statement.
+    if (data.httpStatus >= 400 || (!data.statement_id && !data.status)) {
+      return res.status(502).json({
+        error: data.message || data.raw || `Databricks returned HTTP ${data.httpStatus}`,
+        error_code: data.error_code,
+        http_status: data.httpStatus,
+      });
+    }
+
     const id = data.statement_id;
     let waited = 0;
     while (['PENDING', 'RUNNING'].includes(data.status?.state) && waited < 20000) {
@@ -75,11 +92,15 @@ export default async function handler(req, res) {
     const state = data.status?.state;
 
     if (state !== 'SUCCEEDED') {
-      const detail = data.status?.error?.message || `Query ${state || 'did not complete'}`;
-      const code = state === 'PENDING' || state === 'RUNNING' ? 504 : 502;
-      return res.status(code).json({
-        error: detail,
-        hint: code === 504 ? 'The SQL warehouse is starting up. Refresh in about a minute.' : undefined,
+      const stillWaiting = state === 'PENDING' || state === 'RUNNING';
+      return res.status(stillWaiting ? 504 : 502).json({
+        error:
+          data.status?.error?.message ||
+          data.message ||
+          `Statement ended in state ${state || 'UNKNOWN'}`,
+        error_code: data.status?.error?.error_code || data.error_code,
+        state,
+        hint: stillWaiting ? 'The SQL warehouse is still starting. Refresh in a minute.' : undefined,
       });
     }
 
@@ -88,7 +109,6 @@ export default async function handler(req, res) {
       type: c.type_name,
     }));
 
-    // Cached at the edge so heavy traffic does not repeatedly wake the warehouse.
     res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
 
     return res.status(200).json({
@@ -97,6 +117,6 @@ export default async function handler(req, res) {
       fetchedAt: new Date().toISOString(),
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: `Proxy error: ${err.message}` });
   }
 }
