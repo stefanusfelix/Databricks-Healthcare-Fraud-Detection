@@ -95,6 +95,7 @@
   .metric { padding: 28px 24px 28px 0; }
   .metric .v { font-weight: 800; font-size: 2.375rem; line-height: 1; letter-spacing: -0.03em; }
   .metric.lead .v { color: var(--red); }
+  .metric.pos .v { color: #3E9B6B; }
   .metric .k { font-size: 0.8125rem; color: var(--muted); margin-top: 8px; }
 
   .footnote {
@@ -462,9 +463,9 @@ function kpiStrip(hostId, items) {
   const host = document.getElementById(hostId);
   if (!host) return;
   host.replaceChildren();
-  items.forEach(({ value, label, lead }) => {
+  items.forEach(({ value, label, lead, pos }) => {
     const d = document.createElement('div');
-    d.className = 'metric' + (lead ? ' lead' : '');
+    d.className = 'metric' + (lead ? ' lead' : '') + (pos ? ' pos' : '');
     const v = document.createElement('div');
     v.className = 'v';
     v.textContent = value;
@@ -537,7 +538,7 @@ function renderBusiness() {
       { value: money(valueStopped), label: 'Value stopped' },
       { value: money(lossMissed), label: 'Loss from missed fraud' },
       { value: money(costInv), label: 'Cost of investigations' },
-      { value: money(netSaving), label: 'Net saving', lead: true },
+      { value: money(netSaving), label: 'Net saving', pos: true },
     ]);
 
     groupedBar('c-breakdown', ['Missed fraud (paid out)', 'Wasted investigations'],
