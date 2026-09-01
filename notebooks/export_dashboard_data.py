@@ -84,7 +84,7 @@ QUERIES["business_kpis"] = f"""
 QUERIES["business_monthly"] = f"""
     WITH base AS ({BASE})
     SELECT
-        date_format(month, 'MMM yyyy')                                  AS month,
+        month,                                  AS month,
         SUM(CASE WHEN actual = 1 AND predicted = 1 THEN 1 ELSE 0 END)   AS fraud_caught,
         SUM(CASE WHEN actual = 1 AND predicted = 0 THEN 1 ELSE 0 END)   AS fraud_missed,
         ROUND(SUM(CASE WHEN actual = 1 AND predicted = 1 THEN amount ELSE 0 END), 0) AS value_stopped,
