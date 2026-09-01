@@ -184,9 +184,7 @@
       <div class="metric"><div class="v">0.59</div><div class="k">F1</div></div>
     </div>
     <p class="footnote">
-      Held-out test set, 2024 H2 to 2025, at a decision threshold of 0.5. Recall leads because a missed
-      fraudulent claim costs far more than a false alarm sent for review. An earlier model scored higher on
-      every measure but used fields only available after adjudication, so it could never run in production.
+      Held-out test set: Jul 2024 to Jan 2025, at a decision threshold of 0.5. Recall leads because a missed fraudulent claim costs far more than a false alarm sent for review.
     </p>
 
     <div class="grid">
@@ -221,19 +219,6 @@
         <details id="t-prediction"></details>
       </div>
     </div>
-
-    <div class="grid full">
-      <div class="card">
-        <h2>Feature drift</h2>
-        <p class="blurb">
-          Population Stability Index per input against the pre-2024 baseline, most recent month.
-          Bars at or above 0.25 are shown in red.
-        </p>
-        <div class="plot tall"><canvas id="c-psi"></canvas></div>
-        <details id="t-psi"></details>
-      </div>
-    </div>
-  </div>
 
   <!-- ============ BUSINESS IMPACT ============ -->
   <div id="view-business" role="tabpanel" aria-labelledby="tab-business" hidden>
@@ -282,9 +267,7 @@
   </div>
 
   <footer>
-    Built on Databricks — Delta Lake medallion pipeline in Unity Catalog, MLflow model registry, and a
-    served scoring endpoint. These panels read a snapshot exported from the monitoring views. Data is
-    synthetic.
+    Built on Databricks - Delta Lake medallion pipeline in Unity Catalog, MLflow model registry, and a served scoring endpoint.
   </footer>
 
 </div>
@@ -462,41 +445,6 @@ function render() {
     fail('c-flagrate', 'data/prediction.json not found');
   }
 
-  // --- psi: horizontal bars ---
-  const psi = data.psi;
-  if (psi) {
-    const features = col(psi, 'feature', false).map(String);
-    const values = col(psi, 'psi');
-    if (charts['c-psi']) charts['c-psi'].destroy();
-    charts['c-psi'] = new Chart(document.getElementById('c-psi'), {
-      type: 'bar',
-      data: {
-        labels: features,
-        datasets: [{
-          label: 'PSI',
-          data: values,
-          backgroundColor: values.map((v) => (v >= 0.25 ? RED : GREY)),
-        }],
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          valueLabels: { format: (v) => Number(v).toFixed(2) },
-        },
-        scales: {
-          x: { beginAtZero: true, grid: { color: '#E9E5DC' } },
-          y: { grid: { display: false } },
-        },
-      },
-    });
-    table('t-psi', psi);
-  } else {
-    fail('c-psi', 'data/psi.json not found');
-  }
-
   // --- business impact ---
   renderBusiness();
 }
@@ -659,7 +607,7 @@ async function loadAll(bust) {
   dot.classList.remove('live');
   status.textContent = 'Loading…';
 
-  const ids = ['performance', 'prediction', 'psi', 'business_kpis', 'business_monthly'];
+  const ids = ['performance', 'prediction', 'business_kpis', 'business_monthly'];
   const results = await Promise.all(
     ids.map(async (id) => {
       try {
