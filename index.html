@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Healthcare Fraud Detection — Impact Analysis</title>
+<meta name="description" content="Model drift and business impact monitoring for a healthcare claims fraud detection model built on Databricks.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --cream: #F2F0EA;
+    --ink: #000000;
+    --red: #EE3B4E;
+    --muted: #6E6A61;
+    --rule: #D6D2C8;
+    --panel: #FBFAF7;
+    --grey: #A9A498;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--cream);
+    color: var(--ink);
+    font-family: Archivo, system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 28px 96px; }
+
+  header { padding: 64px 0 0; }
+
+  h1 {
+    font-weight: 800;
+    font-size: clamp(2rem, 5.5vw, 3.5rem);
+    line-height: 1;
+    letter-spacing: -0.035em;
+    margin: 0 0 18px;
+    max-width: 18ch;
+  }
+
+  .standfirst {
+    max-width: 60ch;
+    font-size: 1.0625rem;
+    color: var(--muted);
+    margin: 0 0 26px;
+  }
+
+  .status {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 14px;
+    font-size: 0.875rem; color: var(--muted);
+    padding-bottom: 26px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--grey); flex: none; }
+  .dot.live { background: var(--red); }
+
+  button.refresh {
+    font: inherit; font-size: 0.875rem; font-weight: 600;
+    color: var(--ink); background: none; border: 1.5px solid var(--ink);
+    padding: 7px 16px; cursor: pointer;
+  }
+  button.refresh:hover { background: var(--ink); color: var(--cream); }
+  button.refresh:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
+  button.refresh[disabled] { opacity: 0.4; cursor: default; }
+
+  /* ---- tabs ---- */
+
+  nav.tabs {
+    display: flex; gap: 30px;
+    border-bottom: 2px solid var(--ink);
+  }
+  nav.tabs button {
+    font: inherit; font-weight: 600; font-size: 0.9375rem;
+    background: none; border: 0; cursor: pointer;
+    color: var(--muted); padding: 0 0 12px;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+  }
+  nav.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--red); }
+  nav.tabs button:focus-visible { outline: 3px solid var(--red); outline-offset: 3px; }
+
+  /* ---- metric strip ---- */
+
+  .model {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    border-bottom: 1px solid var(--rule);
+  }
+  .metric { padding: 28px 24px 28px 0; }
+  .metric .v { font-weight: 800; font-size: 2.375rem; line-height: 1; letter-spacing: -0.03em; }
+  .metric.lead .v { color: var(--red); }
+  .metric .k { font-size: 0.8125rem; color: var(--muted); margin-top: 8px; }
+
+  .footnote {
+    font-size: 0.8125rem; color: var(--muted);
+    padding: 16px 0 0; max-width: 74ch;
+  }
+
+  /* ---- grid of panels ---- */
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
+    gap: 26px;
+    padding-top: 44px;
+  }
+  .grid.full { grid-template-columns: 1fr; }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    padding: 22px;
+  }
+  .card h2 {
+    font-weight: 700; font-size: 1.0625rem; letter-spacing: -0.015em;
+    margin: 0 0 4px;
+  }
+  .card p.blurb {
+    color: var(--muted); font-size: 0.875rem; margin: 0 0 18px; max-width: 60ch;
+  }
+  .plot { position: relative; height: 260px; }
+  .plot.tall { height: 380px; }
+
+  .msg {
+    color: var(--muted); font-size: 0.9375rem; text-align: center;
+    padding: 60px 20px;
+  }
+  .msg.bad { color: var(--red); }
+
+  details { margin-top: 16px; border-top: 1px solid var(--rule); }
+  summary { cursor: pointer; padding: 11px 0; font-size: 0.8125rem; font-weight: 500; }
+  summary:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
+  .scroll { overflow-x: auto; padding-bottom: 6px; }
+
+  table { border-collapse: collapse; font-size: 0.8125rem; width: 100%; }
+  th, td { text-align: left; padding: 7px 16px 7px 0; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+  th { font-weight: 600; }
+  td { color: #33312D; }
+
+  footer {
+    margin-top: 72px; padding-top: 24px; border-top: 1px solid var(--rule);
+    font-size: 0.8125rem; color: var(--muted); max-width: 74ch;
+  }
+
+  [hidden] { display: none !important; }
+
+  @media (max-width: 600px) {
+    .grid { grid-template-columns: 1fr; }
+    .plot { height: 230px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Healthcare fraud detection</h1>
+    <p class="standfirst">
+      A gradient-boosted classifier scores claims at submission time, before adjudication.
+      These panels track whether it still behaves the way it did when it was trained.
+    </p>
+    <div class="status">
+      <span class="dot" id="dot"></span>
+      <span id="statusText">Loading…</span>
+      <button class="refresh" id="refreshBtn">Refresh</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tab-drift" aria-controls="view-drift" aria-selected="true">Model drift</button>
+    <button role="tab" id="tab-business" aria-controls="view-business" aria-selected="false">Business impact</button>
+  </nav>
+
+  <!-- ============ MODEL DRIFT ============ -->
+  <div id="view-drift" role="tabpanel" aria-labelledby="tab-drift">
+
+    <div class="model">
+      <div class="metric lead"><div class="v">0.94</div><div class="k">Recall</div></div>
+      <div class="metric"><div class="v">0.43</div><div class="k">Precision</div></div>
+      <div class="metric"><div class="v">0.79</div><div class="k">AUC-PR</div></div>
+      <div class="metric"><div class="v">0.59</div><div class="k">F1</div></div>
+    </div>
+    <p class="footnote">
+      Held-out test set, 2024 H2 to 2025, at a decision threshold of 0.5. Recall leads because a missed
+      fraudulent claim costs far more than a false alarm sent for review. An earlier model scored higher on
+      every measure but used fields only available after adjudication, so it could never run in production.
+    </p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Recall over time</h2>
+        <p class="blurb">Share of actual fraud the model caught, by month.</p>
+        <div class="plot"><canvas id="c-recall"></canvas></div>
+      </div>
+
+      <div class="card">
+        <h2>Precision over time</h2>
+        <p class="blurb">Share of flagged claims that turned out to be fraud.</p>
+        <div class="plot"><canvas id="c-precision"></canvas></div>
+      </div>
+
+      <div class="card">
+        <h2>Confusion matrix counts</h2>
+        <p class="blurb">
+          True positives, false positives and false negatives per month. False negatives are the
+          expensive column.
+        </p>
+        <div class="plot"><canvas id="c-confusion"></canvas></div>
+        <details id="t-performance"></details>
+      </div>
+
+      <div class="card">
+        <h2>Flag rate over time</h2>
+        <p class="blurb">
+          Percentage of claims flagged for review. Needs no labels, so it moves first when something shifts.
+        </p>
+        <div class="plot"><canvas id="c-flagrate"></canvas></div>
+        <details id="t-prediction"></details>
+      </div>
+    </div>
+
+    <div class="grid full">
+      <div class="card">
+        <h2>Feature drift</h2>
+        <p class="blurb">
+          Population Stability Index per input against the pre-2024 baseline, most recent month.
+          Bars at or above 0.25 are shown in red.
+        </p>
+        <div class="plot tall"><canvas id="c-psi"></canvas></div>
+        <details id="t-psi"></details>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ BUSINESS IMPACT ============ -->
+  <div id="view-business" role="tabpanel" aria-labelledby="tab-business" hidden>
+
+    <p class="footnote" style="padding-top:26px">
+      <strong style="color:var(--ink)">Business case.</strong> A missed fraudulent claim costs the full
+      claim amount. A false alarm costs $280, the average cost of investigating a claim. Every figure below
+      follows from those two assumptions.
+    </p>
+
+    <div class="model" id="kpi-money"></div>
+    <div class="model" id="kpi-counts"></div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Fraud caught vs missed</h2>
+        <p class="blurb">Counts per month. The red bars are the ones that cost real money.</p>
+        <div class="plot"><canvas id="c-caught"></canvas></div>
+      </div>
+
+      <div class="card">
+        <h2>Value stopped vs total cost</h2>
+        <p class="blurb">Fraud value prevented against what running the model cost that month.</p>
+        <div class="plot"><canvas id="c-value"></canvas></div>
+      </div>
+
+      <div class="card">
+        <h2>Cost breakdown by type</h2>
+        <p class="blurb">
+          Where the cost sits. Wasted investigations dominate, which is the deliberate trade for
+          high recall.
+        </p>
+        <div class="plot"><canvas id="c-breakdown"></canvas></div>
+      </div>
+
+      <div class="card">
+        <h2>With model vs without</h2>
+        <p class="blurb">
+          Without the model every fraudulent claim is paid out. With it, cost is missed fraud plus
+          investigation spend.
+        </p>
+        <div class="plot"><canvas id="c-compare"></canvas></div>
+        <details id="t-business_monthly"></details>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Built on Databricks — Delta Lake medallion pipeline in Unity Catalog, MLflow model registry, and a
+    served scoring endpoint. These panels read a snapshot exported from the monitoring views. Data is
+    synthetic.
+  </footer>
+
+</div>
+
+<script>
+const RED = '#EE3B4E';
+const INK = '#1A1A1A';
+const GREY = '#A9A498';
+
+Chart.defaults.font.family = 'Archivo, system-ui, sans-serif';
+Chart.defaults.font.size = 12;
+Chart.defaults.color = '#6E6A61';
+Chart.defaults.borderColor = '#E4E0D7';
+
+const charts = {};
+const data = {};
+
+const num = (v) => (v === null || v === '' || isNaN(Number(v)) ? null : Number(v));
+
+function fmt(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  if (isNaN(Number(v))) return String(v);
+  const n = Number(v);
+  return Number.isInteger(n) ? n.toLocaleString() : n.toFixed(Math.abs(n) < 1 ? 3 : 2);
+}
+
+// Pull one column out of a snapshot payload by name.
+function col(payload, name, asNumber = true) {
+  const i = payload.columns.findIndex((c) => c.name === name);
+  if (i === -1) return null;
+  return payload.rows.map((r) => (asNumber ? num(r[i]) : r[i]));
+}
+
+function fail(canvasId, text) {
+  const cv = document.getElementById(canvasId);
+  if (!cv) return;
+  const p = document.createElement('p');
+  p.className = 'msg bad';
+  p.textContent = text;
+  cv.parentElement.replaceChildren(p);
+}
+
+function line(canvasId, labels, sets, opts = {}) {
+  if (charts[canvasId]) charts[canvasId].destroy();
+  charts[canvasId] = new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: sets.map((s) => ({
+        label: s.label,
+        data: s.data,
+        borderColor: s.color,
+        backgroundColor: s.color,
+        borderWidth: 2,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        tension: 0.25,
+        spanGaps: true,
+      })),
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: sets.length > 1, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 14 } },
+      },
+      scales: {
+        x: { grid: { display: false } },
+        y: { grid: { color: '#E9E5DC' }, ...(opts.y || {}) },
+      },
+    },
+  });
+}
+
+function render() {
+  // --- performance: recall, precision, confusion matrix ---
+  const perf = data.performance;
+  if (perf) {
+    const months = col(perf, 'month', false).map(String);
+
+    line('c-recall', months, [{ label: 'Recall', data: col(perf, 'recall'), color: RED }],
+         { y: { suggestedMin: 0, suggestedMax: 1 } });
+
+    line('c-precision', months, [{ label: 'Precision', data: col(perf, 'precision'), color: INK }],
+         { y: { suggestedMin: 0, suggestedMax: 1 } });
+
+    if (charts['c-confusion']) charts['c-confusion'].destroy();
+    charts['c-confusion'] = new Chart(document.getElementById('c-confusion'), {
+      type: 'bar',
+      data: {
+        labels: months,
+        datasets: [
+          { label: 'True positives',  data: col(perf, 'tp'), backgroundColor: INK },
+          { label: 'False positives', data: col(perf, 'fp'), backgroundColor: GREY },
+          { label: 'False negatives', data: col(perf, 'fn'), backgroundColor: RED },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 14 } } },
+        scales: {
+          x: { stacked: true, grid: { display: false } },
+          y: { stacked: true, beginAtZero: true, grid: { color: '#E9E5DC' } },
+        },
+      },
+    });
+
+    table('t-performance', perf);
+  } else {
+    ['c-recall', 'c-precision', 'c-confusion'].forEach((id) => fail(id, 'data/performance.json not found'));
+  }
+
+  // --- prediction: flag rate ---
+  const pred = data.prediction;
+  if (pred) {
+    const months = col(pred, 'month', false).map(String);
+    line('c-flagrate', months, [{ label: 'Flag rate %', data: col(pred, 'flagged_pct'), color: RED }],
+         { y: { beginAtZero: true } });
+    table('t-prediction', pred);
+  } else {
+    fail('c-flagrate', 'data/prediction.json not found');
+  }
+
+  // --- psi: horizontal bars ---
+  const psi = data.psi;
+  if (psi) {
+    const features = col(psi, 'feature', false).map(String);
+    const values = col(psi, 'psi');
+    if (charts['c-psi']) charts['c-psi'].destroy();
+    charts['c-psi'] = new Chart(document.getElementById('c-psi'), {
+      type: 'bar',
+      data: {
+        labels: features,
+        datasets: [{
+          label: 'PSI',
+          data: values,
+          backgroundColor: values.map((v) => (v >= 0.25 ? RED : GREY)),
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { beginAtZero: true, grid: { color: '#E9E5DC' } },
+          y: { grid: { display: false } },
+        },
+      },
+    });
+    table('t-psi', psi);
+  } else {
+    fail('c-psi', 'data/psi.json not found');
+  }
+
+  // --- business impact ---
+  renderBusiness();
+}
+
+const money = (n) =>
+  n === null ? '—' : '$' + Math.round(n).toLocaleString();
+
+function kpiStrip(hostId, items) {
+  const host = document.getElementById(hostId);
+  if (!host) return;
+  host.replaceChildren();
+  items.forEach(({ value, label, lead }) => {
+    const d = document.createElement('div');
+    d.className = 'metric' + (lead ? ' lead' : '');
+    const v = document.createElement('div');
+    v.className = 'v';
+    v.textContent = value;
+    v.style.fontSize = String(value).length > 8 ? '1.75rem' : '2.375rem';
+    const k = document.createElement('div');
+    k.className = 'k';
+    k.textContent = label;
+    d.append(v, k);
+    host.appendChild(d);
+  });
+}
+
+function groupedBar(canvasId, labels, sets, moneyAxis) {
+  if (charts[canvasId]) charts[canvasId].destroy();
+  charts[canvasId] = new Chart(document.getElementById(canvasId), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: sets.map((s) => ({ label: s.label, data: s.data, backgroundColor: s.color })),
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: sets.length > 1, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 14 } },
+        tooltip: moneyAxis
+          ? { callbacks: { label: (c) => `${c.dataset.label}: ${money(c.parsed.y)}` } }
+          : {},
+      },
+      scales: {
+        x: { grid: { display: false } },
+        y: {
+          beginAtZero: true,
+          grid: { color: '#E9E5DC' },
+          ticks: moneyAxis ? { callback: (v) => money(v) } : {},
+        },
+      },
+    },
+  });
+}
+
+function renderBusiness() {
+  const k = data.business_kpis;
+  const m = data.business_monthly;
+
+  if (k && k.rows.length) {
+    const g = (name) => {
+      const i = k.columns.findIndex((c) => c.name === name);
+      return i === -1 ? null : num(k.rows[0][i]);
+    };
+
+    const valueStopped = g('value_stopped');
+    const lossMissed = g('loss_missed');
+    const costInv = g('cost_investigations');
+    const netSaving = valueStopped !== null && costInv !== null ? valueStopped - costInv : null;
+    const withModel = (lossMissed || 0) + (costInv || 0);
+    const withoutModel = (valueStopped || 0) + (lossMissed || 0);
+
+    kpiStrip('kpi-counts', [
+      { value: (g('claims_scored') || 0).toLocaleString(), label: 'Claims scored' },
+      { value: (g('fraud_caught') || 0).toLocaleString(), label: 'Fraud caught' },
+      { value: (g('fraud_missed') || 0).toLocaleString(), label: 'Fraud missed', lead: true },
+      { value: (g('false_alarms') || 0).toLocaleString(), label: 'False alarms' },
+    ]);
+
+    kpiStrip('kpi-money', [
+      { value: money(valueStopped), label: 'Value stopped' },
+      { value: money(lossMissed), label: 'Loss from missed fraud' },
+      { value: money(costInv), label: 'Cost of investigations' },
+      { value: money(netSaving), label: 'Net saving', lead: true },
+    ]);
+
+    groupedBar('c-breakdown', ['Missed fraud (paid out)', 'Wasted investigations'],
+      [{ label: 'Total cost', data: [lossMissed, costInv], color: [RED, GREY] }], true);
+
+    groupedBar('c-compare', ['With model', 'Without model'],
+      [{ label: 'Total cost', data: [withModel, withoutModel], color: [INK, RED] }], true);
+  } else {
+    ['c-breakdown', 'c-compare'].forEach((id) => fail(id, 'data/business_kpis.json not found'));
+  }
+
+  if (m && m.rows.length) {
+    const months = col(m, 'month', false).map(String);
+    groupedBar('c-caught', months, [
+      { label: 'Fraud caught', data: col(m, 'fraud_caught'), color: INK },
+      { label: 'Fraud missed', data: col(m, 'fraud_missed'), color: RED },
+    ], false);
+    groupedBar('c-value', months, [
+      { label: 'Value stopped', data: col(m, 'value_stopped'), color: INK },
+      { label: 'Total cost', data: col(m, 'total_cost'), color: RED },
+    ], true);
+    table('t-business_monthly', m);
+  } else {
+    ['c-caught', 'c-value'].forEach((id) => fail(id, 'data/business_monthly.json not found'));
+  }
+}
+
+function table(hostId, payload) {
+  const host = document.getElementById(hostId);
+  if (!host) return;
+  host.replaceChildren();
+
+  const s = document.createElement('summary');
+  s.textContent = `Show the ${payload.rows.length} underlying row${payload.rows.length === 1 ? '' : 's'}`;
+  host.appendChild(s);
+
+  const scroll = document.createElement('div');
+  scroll.className = 'scroll';
+  const t = document.createElement('table');
+
+  const tr = document.createElement('tr');
+  payload.columns.forEach((c) => {
+    const th = document.createElement('th');
+    th.textContent = c.name;
+    tr.appendChild(th);
+  });
+  const thead = document.createElement('thead');
+  thead.appendChild(tr);
+  t.appendChild(thead);
+
+  const tb = document.createElement('tbody');
+  payload.rows.forEach((row) => {
+    const r = document.createElement('tr');
+    row.forEach((cell) => {
+      const td = document.createElement('td');
+      td.textContent = fmt(cell);
+      r.appendChild(td);
+    });
+    tb.appendChild(r);
+  });
+  t.appendChild(tb);
+
+  scroll.appendChild(t);
+  host.appendChild(scroll);
+}
+
+async function loadAll(bust) {
+  const btn = document.getElementById('refreshBtn');
+  const dot = document.getElementById('dot');
+  const status = document.getElementById('statusText');
+
+  btn.disabled = true;
+  dot.classList.remove('live');
+  status.textContent = 'Loading…';
+
+  const ids = ['performance', 'prediction', 'psi', 'business_kpis', 'business_monthly'];
+  const results = await Promise.all(
+    ids.map(async (id) => {
+      try {
+        const res = await fetch(`data/${id}.json` + (bust ? `?t=${Date.now()}` : ''));
+        if (!res.ok) return null;
+        return await res.json();
+      } catch {
+        return null;
+      }
+    })
+  );
+
+  ids.forEach((id, i) => { data[id] = results[i]; });
+  render();
+
+  const stamp = results.find((r) => r && r.fetchedAt);
+  if (stamp) {
+    dot.classList.add('live');
+    status.textContent =
+      'Snapshot taken ' +
+      new Date(stamp.fetchedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  } else {
+    status.textContent = 'No snapshot data found. Run the export notebook, then commit and push.';
+  }
+
+  btn.disabled = false;
+}
+
+// tabs
+const TABS = [['tab-drift', 'view-drift'], ['tab-business', 'view-business']];
+TABS.forEach(([tabId, viewId]) => {
+  document.getElementById(tabId).addEventListener('click', () => {
+    TABS.forEach(([t, v]) => {
+      const on = t === tabId;
+      document.getElementById(t).setAttribute('aria-selected', String(on));
+      document.getElementById(v).hidden = !on;
+    });
+    Object.values(charts).forEach((c) => c.resize());
+  });
+});
+
+document.getElementById('refreshBtn').addEventListener('click', () => loadAll(true));
+loadAll(false);
+</script>
+</body>
+</html>
