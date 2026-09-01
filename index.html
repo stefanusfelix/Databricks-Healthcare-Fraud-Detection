@@ -162,10 +162,6 @@
 
   <header>
     <h1>Healthcare fraud detection</h1>
-    <p class="standfirst">
-      A gradient-boosted classifier scores claims at submission time, before adjudication.
-      These panels track whether it still behaves the way it did when it was trained.
-    </p>
     <div class="status">
       <span class="dot" id="dot"></span>
       <span id="statusText">Loading…</span>
@@ -308,6 +304,52 @@ const data = {};
 
 const num = (v) => (v === null || v === '' || isNaN(Number(v)) ? null : Number(v));
 
+// Timestamps arrive as full ISO strings. Show "Jul 2024" instead.
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function monthLabel(v) {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  const m = s.match(/^(\d{4})-(\d{2})/);
+  if (m) return `${MONTHS[Number(m[2]) - 1]} ${m[1]}`;
+  return s;
+}
+
+// Draws each value on top of its point or bar, the way the Databricks panels do.
+const valueLabels = {
+  id: 'valueLabels',
+  afterDatasetsDraw(chart, args, opts) {
+    const { ctx } = chart;
+    const fmtFn = opts && opts.format ? opts.format : (v) => (v === null ? '' : String(v));
+    ctx.save();
+    ctx.font = '600 11px Archivo, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    chart.data.datasets.forEach((ds, di) => {
+      const meta = chart.getDatasetMeta(di);
+      if (meta.hidden) return;
+      meta.data.forEach((el, i) => {
+        const raw = ds.data[i];
+        if (raw === null || raw === undefined || raw === 0) return;
+        const text = fmtFn(raw);
+        const stacked = chart.options.scales.y && chart.options.scales.y.stacked;
+        if (meta.type === 'bar' && stacked) {
+          const h = Math.abs(el.base - el.y);
+          if (h < 15) return;                       // no room, skip
+          ctx.fillStyle = di === 0 ? '#F2F0EA' : '#1A1A1A';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(text, el.x, (el.y + el.base) / 2);
+          ctx.textBaseline = 'bottom';
+        } else {
+          ctx.fillStyle = '#4A463F';
+          ctx.fillText(text, el.x, el.y - 6);
+        }
+      });
+    });
+    ctx.restore();
+  },
+};
+Chart.register(valueLabels);
+
 function fmt(v) {
   if (v === null || v === undefined || v === '') return '—';
   if (isNaN(Number(v))) return String(v);
@@ -353,11 +395,13 @@ function line(canvasId, labels, sets, opts = {}) {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
+      layout: { padding: { top: 18 } },
       plugins: {
         legend: { display: sets.length > 1, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 14 } },
+        valueLabels: { format: opts.labelFormat || ((v) => (Math.abs(v) < 10 ? v.toFixed(2) : String(Math.round(v)))) },
       },
       scales: {
-        x: { grid: { display: false } },
+        x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true } },
         y: { grid: { color: '#E9E5DC' }, ...(opts.y || {}) },
       },
     },
@@ -368,13 +412,13 @@ function render() {
   // --- performance: recall, precision, confusion matrix ---
   const perf = data.performance;
   if (perf) {
-    const months = col(perf, 'month', false).map(String);
+    const months = col(perf, 'month', false).map(monthLabel);
 
     line('c-recall', months, [{ label: 'Recall', data: col(perf, 'recall'), color: RED }],
-         { y: { suggestedMin: 0, suggestedMax: 1 } });
+         { y: { suggestedMin: 0, suggestedMax: 1 }, labelFormat: (v) => Number(v).toFixed(2) });
 
     line('c-precision', months, [{ label: 'Precision', data: col(perf, 'precision'), color: INK }],
-         { y: { suggestedMin: 0, suggestedMax: 1 } });
+         { y: { suggestedMin: 0, suggestedMax: 1 }, labelFormat: (v) => Number(v).toFixed(2) });
 
     if (charts['c-confusion']) charts['c-confusion'].destroy();
     charts['c-confusion'] = new Chart(document.getElementById('c-confusion'), {
@@ -391,9 +435,12 @@ function render() {
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
-        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 14 } } },
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 14 } },
+          valueLabels: { format: (v) => String(Math.round(v)) },
+        },
         scales: {
-          x: { stacked: true, grid: { display: false } },
+          x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true } },
           y: { stacked: true, beginAtZero: true, grid: { color: '#E9E5DC' } },
         },
       },
@@ -407,9 +454,9 @@ function render() {
   // --- prediction: flag rate ---
   const pred = data.prediction;
   if (pred) {
-    const months = col(pred, 'month', false).map(String);
+    const months = col(pred, 'month', false).map(monthLabel);
     line('c-flagrate', months, [{ label: 'Flag rate %', data: col(pred, 'flagged_pct'), color: RED }],
-         { y: { beginAtZero: true } });
+         { y: { beginAtZero: true }, labelFormat: (v) => Number(v).toFixed(1) + '%' });
     table('t-prediction', pred);
   } else {
     fail('c-flagrate', 'data/prediction.json not found');
@@ -435,7 +482,10 @@ function render() {
         indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: false },
+          valueLabels: { format: (v) => Number(v).toFixed(2) },
+        },
         scales: {
           x: { beginAtZero: true, grid: { color: '#E9E5DC' } },
           y: { grid: { display: false } },
@@ -484,15 +534,17 @@ function groupedBar(canvasId, labels, sets, moneyAxis) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      layout: { padding: { top: 18 } },
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: sets.length > 1, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, padding: 14 } },
         tooltip: moneyAxis
           ? { callbacks: { label: (c) => `${c.dataset.label}: ${money(c.parsed.y)}` } }
           : {},
+        valueLabels: { format: (v) => (moneyAxis ? money(v) : String(Math.round(v))) },
       },
       scales: {
-        x: { grid: { display: false } },
+        x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true } },
         y: {
           beginAtZero: true,
           grid: { color: '#E9E5DC' },
@@ -544,7 +596,7 @@ function renderBusiness() {
   }
 
   if (m && m.rows.length) {
-    const months = col(m, 'month', false).map(String);
+    const months = col(m, 'month', false).map(monthLabel);
     groupedBar('c-caught', months, [
       { label: 'Fraud caught', data: col(m, 'fraud_caught'), color: INK },
       { label: 'Fraud missed', data: col(m, 'fraud_missed'), color: RED },
@@ -654,3 +706,4 @@ loadAll(false);
 </script>
 </body>
 </html>
+
