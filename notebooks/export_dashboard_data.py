@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # MAGIC %md
 # MAGIC # Export dashboard snapshots
 # MAGIC
@@ -52,11 +56,13 @@ COST_PER_INVESTIGATION = 280
 # expressions to match your table; keep the aliases exactly as they are.
 BASE = """
     SELECT
-        date_trunc('month', claim_date) AS month,
-        is_fraud                        AS actual,
-        prediction                      AS predicted,
-        claim_amount                    AS amount
-    FROM healthcare_fraud.ml.fraud_predictions
+        date_trunc('month', p.claim_submission_date) AS month,
+        g.is_fraud                                   AS actual,
+        p.predicted_label                            AS predicted,
+        g.claim_amount                               AS amount
+    FROM healthcare_fraud.ml.fraud_predictions p
+    JOIN healthcare_fraud.gold.claim_features_gold g
+      ON g.claim_id = p.claim_id
 """
 
 QUERIES["business_kpis"] = f"""
@@ -134,11 +140,21 @@ def export(panel_id, sql):
     path = DATA_DIR / f"{panel_id}.json"
     path.write_text(json.dumps(payload, indent=2))
 
-    print(f"{panel_id:12s} {len(rows):4d} rows, {len(columns)} columns -> {path.name}")
+    print(f"{panel_id:18s} {len(rows):4d} rows, {len(columns)} columns -> {path.name}")
     return payload
 
 
-snapshots = {pid: export(pid, sql) for pid, sql in QUERIES.items()}
+snapshots = {}
+failures = {}
+
+for pid, sql in QUERIES.items():
+    try:
+        snapshots[pid] = export(pid, sql)
+    except Exception as e:
+        failures[pid] = str(e).split("\n")[0]
+        print(f"{pid:18s} FAILED — {failures[pid][:120]}")
+
+print(f"\n{len(snapshots)} exported, {len(failures)} failed")
 
 # COMMAND ----------
 

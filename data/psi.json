@@ -1,0 +1,113 @@
+{
+  "columns": [
+    {
+      "name": "feature",
+      "type": "string"
+    },
+    {
+      "name": "psi",
+      "type": "double"
+    },
+    {
+      "name": "severity",
+      "type": "string"
+    },
+    {
+      "name": "n_current",
+      "type": "bigint"
+    }
+  ],
+  "rows": [
+    [
+      "submission_month",
+      13.1985,
+      "significant",
+      89
+    ],
+    [
+      "provider_claim_count",
+      0.7977,
+      "significant",
+      89
+    ],
+    [
+      "days_service_to_claim",
+      0.4938,
+      "significant",
+      89
+    ],
+    [
+      "provider_monthly_claim_volume",
+      0.1795,
+      "moderate",
+      89
+    ],
+    [
+      "patient_age",
+      0.1738,
+      "moderate",
+      89
+    ],
+    [
+      "amount_zscore_within_provider",
+      0.1582,
+      "moderate",
+      89
+    ],
+    [
+      "amount_vs_provider_avg",
+      0.1305,
+      "moderate",
+      89
+    ],
+    [
+      "claim_amount",
+      0.128,
+      "moderate",
+      89
+    ],
+    [
+      "prior_visits_12m",
+      0.1142,
+      "moderate",
+      89
+    ],
+    [
+      "patient_state",
+      0.0814,
+      "stable",
+      89
+    ],
+    [
+      "provider_avg_claim_amount",
+      0.0556,
+      "stable",
+      89
+    ],
+    [
+      "diagnosis_code",
+      0.0532,
+      "stable",
+      89
+    ],
+    [
+      "procedure_code",
+      0.0489,
+      "stable",
+      89
+    ],
+    [
+      "submission_dayofweek",
+      0.0454,
+      "stable",
+      89
+    ],
+    [
+      "visit_type",
+      0.0296,
+      "stable",
+      89
+    ]
+  ],
+  "fetchedAt": "2026-09-01T02:51:19.091977+00:00"
+}

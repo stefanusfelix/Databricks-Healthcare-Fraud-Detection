@@ -1,0 +1,54 @@
+{
+  "columns": [
+    {
+      "name": "claims_scored",
+      "type": "bigint"
+    },
+    {
+      "name": "fraud_caught",
+      "type": "bigint"
+    },
+    {
+      "name": "fraud_missed",
+      "type": "bigint"
+    },
+    {
+      "name": "false_alarms",
+      "type": "bigint"
+    },
+    {
+      "name": "median_claim",
+      "type": "decimal(11,0)"
+    },
+    {
+      "name": "max_claim",
+      "type": "decimal(11,0)"
+    },
+    {
+      "name": "value_stopped",
+      "type": "decimal(21,0)"
+    },
+    {
+      "name": "loss_missed",
+      "type": "decimal(21,0)"
+    },
+    {
+      "name": "cost_investigations",
+      "type": "bigint"
+    }
+  ],
+  "rows": [
+    [
+      1201,
+      92,
+      5,
+      121,
+      457.0,
+      2922.0,
+      97205.0,
+      1453.0,
+      33880
+    ]
+  ],
+  "fetchedAt": "2026-09-01T02:51:22.122657+00:00"
+}
