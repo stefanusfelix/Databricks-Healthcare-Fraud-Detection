@@ -279,6 +279,8 @@
 const RED = '#EE3B4E';
 const INK = '#1A1A1A';
 const GREY = '#A9A498';
+const GREEN = '#3E9B6B';
+
 
 Chart.defaults.font.family = 'Archivo, system-ui, sans-serif';
 Chart.defaults.font.size = 12;
@@ -542,7 +544,7 @@ function renderBusiness() {
       [{ label: 'Total cost', data: [lossMissed, costInv], color: [RED, GREY] }], true);
 
     groupedBar('c-compare', ['With model', 'Without model'],
-      [{ label: 'Total cost', data: [withModel, withoutModel], color: [INK, RED] }], true);
+      [{ label: 'Total cost', data: [withModel, withoutModel], color: [GREEN, RED] }], true);
   } else {
     ['c-breakdown', 'c-compare'].forEach((id) => fail(id, 'data/business_kpis.json not found'));
   }
@@ -550,11 +552,11 @@ function renderBusiness() {
   if (m && m.rows.length) {
     const months = col(m, 'month', false).map(monthLabel);
     groupedBar('c-caught', months, [
-      { label: 'Fraud caught', data: col(m, 'fraud_caught'), color: INK },
+      { label: 'Fraud caught', data: col(m, 'fraud_caught'), color: GREEN },
       { label: 'Fraud missed', data: col(m, 'fraud_missed'), color: RED },
     ], false);
     groupedBar('c-value', months, [
-      { label: 'Value stopped', data: col(m, 'value_stopped'), color: INK },
+      { label: 'Value stopped', data: col(m, 'value_stopped'), color: GREEN },
       { label: 'Total cost', data: col(m, 'total_cost'), color: RED },
     ], true);
     table('t-business_monthly', m);
