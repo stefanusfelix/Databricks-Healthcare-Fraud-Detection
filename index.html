@@ -303,6 +303,16 @@ function monthLabel(v) {
   return s;
 }
 
+// Sortable number for a month in either format.
+function monthKey(v) {
+  const s = String(v);
+  let m = s.match(/^(\d{4})-(\d{2})/);
+  if (m) return Number(m[1]) * 12 + Number(m[2]);
+  m = s.match(/^([A-Za-z]{3})\w*\s+(\d{4})$/);
+  if (m) return Number(m[2]) * 12 + MONTHS.indexOf(m[1]) + 1;
+  return 0;
+}
+
 // Draws each value on top of its point or bar, the way the Databricks panels do.
 const valueLabels = {
   id: 'valueLabels',
@@ -551,6 +561,9 @@ function renderBusiness() {
   }
 
   if (m && m.rows.length) {
+    const mi = m.columns.findIndex((c) => c.name === 'month');
+    if (mi !== -1) m.rows.sort((a, b) => monthKey(a[mi]) - monthKey(b[mi]));
+
     const months = col(m, 'month', false).map(monthLabel);
     groupedBar('c-caught', months, [
       { label: 'Fraud caught', data: col(m, 'fraud_caught'), color: GREEN },
